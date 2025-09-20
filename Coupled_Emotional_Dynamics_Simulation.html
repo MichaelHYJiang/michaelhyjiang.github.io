@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Coupled Emotional Dynamics Simulation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap');
+
+  body {
+    margin: 0;
+    font-family: 'Orbitron', sans-serif;
+    background: #0b0f1a;
+    color: #e0e6f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+  }
+
+  h1 {
+    margin: 15px;
+    font-size: 2rem;
+    color: #66ccff;
+    text-shadow: 0 0 8px #2299dd;
+    text-align: center;
+  }
+
+  #controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    background: rgba(30, 35, 45, 0.9);
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 0 12px rgba(0, 200, 255, 0.2);
+    width: 95%;
+    max-width: 1000px;
+  }
+
+  .control {
+    margin: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 120px;
+  }
+
+  label {
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+    color: #a8c7ff;
+  }
+
+  input[type=range] {
+    width: 100%;
+  }
+
+  button {
+    margin: 6px;
+    padding: 6px 14px;
+    background: #1e293b;
+    border: 1px solid #66ccff;
+    border-radius: 8px;
+    color: #66ccff;
+    cursor: pointer;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+  }
+
+  button:hover {
+    background: #223344;
+    box-shadow: 0 0 8px #66ccff;
+  }
+
+  #chart-container {
+    width: 95%;
+    max-width: 1000px;
+    aspect-ratio: 16/9;
+    background: #111622;
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 0 18px rgba(0, 180, 255, 0.15);
+  }
+
+  #equations {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(20, 25, 35, 0.85);
+    border-radius: 10px;
+    font-family: monospace;
+    font-size: 0.85rem;
+    white-space: pre-line;
+    color: #cce6ff;
+    box-shadow: 0 0 10px rgba(0, 200, 255, 0.1);
+    width: 95%;
+    max-width: 1000px;
+  }
+</style>
+</head>
+<body>
+<h1>Coupled Emotional Dynamics Simulation</h1>
+
+<div id="controls">
+  <div class="control">
+    <label>Natural Frequency (ω)</label>
+    <input id="omega" type="range" min="0.1" max="2" step="0.1" value="1">
+  </div>
+  <div class="control">
+    <label>Damping (γ)</label>
+    <input id="damping" type="range" min="0" max="1" step="0.05" value="0.2">
+  </div>
+  <div class="control">
+    <label>Coupling (k)</label>
+    <input id="coupling" type="range" min="0" max="2" step="0.05" value="0.5">
+  </div>
+  <div class="control">
+    <label>Noise Strength (σ)</label>
+    <input id="noise" type="range" min="0" max="1" step="0.05" value="0.3">
+  </div>
+  <div class="control">
+    <button id="pauseBtn">Pause</button>
+    <button id="resetBtn">Reset</button>
+    <button id="bestBtn">Best Params</button>
+  </div>
+</div>
+
+<div id="chart-container">
+  <canvas id="chart"></canvas>
+</div>
+
+<div id="equations">
+dx1/dt = v1
+dv1/dt = -ω² x1 - γ v1 + k(x2 - x1) + σ ξ1(t)
+dx2/dt = v2
+dv2/dt = -ω² x2 - γ v2 + k(x1 - x2) + σ ξ2(t)
+
+State:
+x1 = +0.000, v1 = +0.000
+x2 = +0.000, v2 = +0.000
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById('chart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'Person A', borderColor: '#4fc3f7', borderWidth: 2, data: [], fill: false, tension: 0.2 },
+      { label: 'Person B', borderColor: '#ef5350', borderWidth: 2, data: [], fill: false, tension: 0.2 }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    animation: false,
+    scales: {
+      x: {
+        title: { display: true, text: 'Time (s)', color: '#a8c7ff' },
+        ticks: { color: '#a8c7ff' }
+      },
+      y: {
+        title: { display: true, text: 'Emotional State', color: '#a8c7ff' },
+        ticks: { color: '#a8c7ff' },
+        beginAtZero: false
+      }
+    },
+    plugins: { legend: { labels: { color: '#e0e6f0' } } }
+  }
+});
+
+let omega = parseFloat(document.getElementById('omega').value);
+let damping = parseFloat(document.getElementById('damping').value);
+let coupling = parseFloat(document.getElementById('coupling').value);
+let noise = parseFloat(document.getElementById('noise').value);
+
+let t = 0, dt = 0.05;
+let x1 = 0, v1 = 0, x2 = 0, v2 = 0;
+let paused = false;
+
+function updateParams() {
+  omega = parseFloat(document.getElementById('omega').value);
+  damping = parseFloat(document.getElementById('damping').value);
+  coupling = parseFloat(document.getElementById('coupling').value);
+  noise = parseFloat(document.getElementById('noise').value);
+}
+
+// 经验最优耦合：尽可能大又保持稳定
+function computeOptimalCoupling() {
+  // k_opt ~ min(2*ω, ω^2 - γ^2/4), 仅示例
+  let kMax = 2 * omega; 
+  let kStable = Math.max(0, omega*omega - damping*damping/4);
+  return Math.min(kMax, kStable);
+}
+
+function step() {
+  const xi1 = (Math.random() * 2 - 1);
+  const xi2 = (Math.random() * 2 - 1);
+
+  const a1 = -omega*omega*x1 - damping*v1 + coupling*(x2 - x1) + noise*xi1;
+  const a2 = -omega*omega*x2 - damping*v2 + coupling*(x1 - x2) + noise*xi2;
+
+  x1 += v1 * dt;
+  v1 += a1 * dt;
+  x2 += v2 * dt;
+  v2 += a2 * dt;
+  t += dt;
+}
+
+function formatNumber(n) { return (n>=0?'+':'')+n.toFixed(3); }
+
+function updateChart() {
+  if (!paused) {
+    step();
+
+    chart.data.labels.push(t.toFixed(1));
+    chart.data.datasets[0].data.push(x1);
+    chart.data.datasets[1].data.push(x2);
+
+    if (chart.data.labels.length > 200) {
+      chart.data.labels.shift();
+      chart.data.datasets[0].data.shift();
+      chart.data.datasets[1].data.shift();
+    }
+
+    // 动态纵轴缩放
+    const allData = chart.data.datasets.flatMap(d => d.data);
+    const maxY = Math.max(...allData);
+    const minY = Math.min(...allData);
+    chart.options.scales.y.min = minY - 0.5;
+    chart.options.scales.y.max = maxY + 0.5;
+
+    chart.update();
+
+    document.getElementById('equations').innerText =
+`dx1/dt = v1
+dv1/dt = -ω² x1 - γ v1 + k(x2 - x1) + σ ξ1(t)
+dx2/dt = v2
+dv2/dt = -ω² x2 - γ v2 + k(x1 - x2) + σ ξ2(t)
+
+State:
+x1 = ${formatNumber(x1)}, v1 = ${formatNumber(v1)}
+x2 = ${formatNumber(x2)}, v2 = ${formatNumber(v2)}`;
+  }
+}
+
+setInterval(updateChart, 50);
+
+document.getElementById('omega').addEventListener('input', () => { updateParams(); });
+document.getElementById('damping').addEventListener('input', () => { updateParams(); });
+document.getElementById('coupling').addEventListener('input', () => { updateParams(); });
+document.getElementById('noise').addEventListener('input', () => { updateParams(); });
+
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  paused = !paused;
+  document.getElementById('pauseBtn').innerText = paused ? "Continue" : "Pause";
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  x1 = v1 = x2 = v2 = 0; t = 0;
+  chart.data.labels = [];
+  chart.data.datasets[0].data = [];
+  chart.data.datasets[1].data = [];
+});
+
+document.getElementById('bestBtn').addEventListener('click', () => {
+  omega = parseFloat(document.getElementById('omega').value);
+  damping = parseFloat(document.getElementById('damping').value);
+  noise = parseFloat(document.getElementById('noise').value);
+  coupling = computeOptimalCoupling();
+  document.getElementById('coupling').value = coupling;
+});
+</script>
+</body>
+</html>
